@@ -447,7 +447,7 @@ class NStepsReplayBuffer(ReplayBuffer):
                 next_idx = current_step.copy()
                 last_return = self._normalize_reward(self.rewards[current_step], env)
             else:
-                next_non_terminal = (1.0 - self.dones[current_step]).flatten()
+                next_non_terminal = (1.0 - self.dones[(current_step + 1) % self.buffer_size]).flatten()
                 next_idx = next_idx * next_non_terminal + current_step * (1 - next_non_terminal)
                 last_return = (self._normalize_reward(self.rewards[current_step], env)
                                + self.gamma * last_return * next_non_terminal.reshape(-1, 1))
