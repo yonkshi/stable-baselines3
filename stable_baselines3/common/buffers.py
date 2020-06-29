@@ -399,3 +399,62 @@ class RolloutBuffer(BaseBuffer):
                 self.advantages[batch_inds].flatten(),
                 self.returns[batch_inds].flatten())
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+
+class NStepsReplayBuffer(ReplayBuffer):
+    """
+    N-Step Replay buffer used in off-policy algorithms like SAC/TD3.
+
+    :param buffer_size: (int) Max number of element in the buffer
+    :param observation_space: (spaces.Space) Observation space
+    :param action_space: (spaces.Space) Action space
+    :param device: (th.device)
+    :param n_envs: (int) Number of parallel environments
+    :param optimize_memory_usage: (bool) Enable a memory efficient variant
+        of the replay buffer which reduces by almost a factor two the memory used,
+        at a cost of more complexity.
+        See https://github.com/DLR-RM/stable-baselines3/issues/37#issuecomment-637501195
+        and https://github.com/DLR-RM/stable-baselines3/pull/28#issuecomment-637559274
+    :param n_steps: (int)
+    """
+    def __init__(self,
+                 buffer_size: int,
+                 observation_space: spaces.Space,
+                 action_space: spaces.Space,
+                 device: Union[th.device, str] = 'cpu',
+                 n_envs: int = 1,
+                 optimize_memory_usage: bool = False,
+                 n_steps: int = 4,
+                 gamma: float = 0.99):
+
+        assert not optimize_memory_usage, "n-step replay buffer only support classic replay"
+        super().__init__(buffer_size, observation_space,
+                         action_space, device, n_envs=n_envs, optimize_memory_usage=optimize_memory_usage)
+        self.n_steps = n_steps
+        self.gamma = gamma
+
+    def _get_samples(self,
+                     batch_inds: np.ndarray,
+                     env: Optional[VecNormalize] = None
+                     ) -> ReplayBufferSamples:
+
+        next_idx = batch_inds.copy()
+        # Compute n-step discounted return and associated next-observation
+        last_return = 0.0
+        for step in reversed(range(self.n_steps)):
+            current_step = (batch_inds + step) % self.buffer_size
+            if step == self.n_steps - 1:
+                next_idx = current_step.copy()
+                last_return = self._normalize_reward(self.rewards[current_step], env)
+            else:
+                next_non_terminal = (1.0 - self.dones[current_step]).flatten()
+                next_idx = next_idx * next_non_terminal + current_step * (1 - next_non_terminal)
+                last_return = (self._normalize_reward(self.rewards[current_step], env)
+                               + self.gamma * last_return * next_non_terminal.reshape(-1, 1))
+
+        data = (self._normalize_obs(self.observations[batch_inds, 0, :], env),
+                self.actions[batch_inds, 0, :],
+                self._normalize_obs(self.next_observations[next_idx.astype(np.uint64), 0, :], env),
+                self.dones[batch_inds],
+                last_return)
+        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))

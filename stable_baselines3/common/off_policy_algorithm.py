@@ -15,7 +15,7 @@ from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.type_aliases import GymEnv, RolloutReturn, MaybeCallback
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import ActionNoise
-from stable_baselines3.common.buffers import ReplayBuffer
+from stable_baselines3.common.buffers import ReplayBuffer, NStepsReplayBuffer
 
 
 class OffPolicyAlgorithm(BaseAlgorithm):
@@ -90,7 +90,8 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                  use_sde: bool = False,
                  sde_sample_freq: int = -1,
                  use_sde_at_warmup: bool = False,
-                 sde_support: bool = True):
+                 sde_support: bool = True,
+                 n_steps: int = 1):
 
         super(OffPolicyAlgorithm, self).__init__(policy=policy, env=env, policy_base=policy_base,
                                                  learning_rate=learning_rate, policy_kwargs=policy_kwargs,
@@ -125,13 +126,22 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         self.policy_kwargs['device'] = self.device
         # For gSDE only
         self.use_sde_at_warmup = use_sde_at_warmup
+        # Replay Buffer
+        self.n_steps = n_steps
+        if self.n_steps > 1:
+            self.replay_buffer_class = NStepsReplayBuffer
+            self.replay_buffer_kwargs = dict(n_steps=n_steps, gamma=gamma)
+        else:
+            self.replay_buffer_class = ReplayBuffer
+            self.replay_buffer_kwargs = {}
 
     def _setup_model(self):
         self._setup_lr_schedule()
         self.set_random_seed(self.seed)
-        self.replay_buffer = ReplayBuffer(self.buffer_size, self.observation_space,
-                                          self.action_space, self.device,
-                                          optimize_memory_usage=self.optimize_memory_usage)
+        self.replay_buffer = self.replay_buffer_class(self.buffer_size, self.observation_space,
+                                                      self.action_space, self.device,
+                                                      optimize_memory_usage=self.optimize_memory_usage,
+                                                      **self.replay_buffer_kwargs)
         self.policy = self.policy_class(self.observation_space, self.action_space,
                                         self.lr_schedule, **self.policy_kwargs)
         self.policy = self.policy.to(self.device)

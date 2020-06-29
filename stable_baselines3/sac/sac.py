@@ -43,6 +43,7 @@ class SAC(OffPolicyAlgorithm):
     :param optimize_memory_usage: (bool) Enable a memory efficient variant of the replay buffer
         at a cost of more complexity.
         See https://github.com/DLR-RM/stable-baselines3/issues/37#issuecomment-637501195
+    :param n_steps: (int)
     :param ent_coef: (str or float) Entropy regularization coefficient. (Equivalent to
         inverse of reward scale in the original SAC paper.)  Controlling exploration/exploitation trade-off.
         Set it to 'auto' to learn it automatically (and 'auto_0.1' for using 0.1 as initial value)
@@ -78,6 +79,7 @@ class SAC(OffPolicyAlgorithm):
                  n_episodes_rollout: int = -1,
                  action_noise: Optional[ActionNoise] = None,
                  optimize_memory_usage: bool = False,
+                 n_steps: int = 1,
                  ent_coef: Union[str, float] = 'auto',
                  target_update_interval: int = 1,
                  target_entropy: Union[str, float] = 'auto',
@@ -102,7 +104,8 @@ class SAC(OffPolicyAlgorithm):
                                   create_eval_env=create_eval_env, seed=seed,
                                   use_sde=use_sde, sde_sample_freq=sde_sample_freq,
                                   use_sde_at_warmup=use_sde_at_warmup,
-                                  optimize_memory_usage=optimize_memory_usage)
+                                  optimize_memory_usage=optimize_memory_usage,
+                                  n_steps=n_steps)
 
         self.target_entropy = target_entropy
         self.log_ent_coef = None  # type: Optional[th.Tensor]
