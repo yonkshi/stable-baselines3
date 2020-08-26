@@ -189,7 +189,7 @@ class BaseAlgorithm(ABC):
 
         if eval_env is not None:
             eval_env = self._wrap_env(eval_env)
-            assert eval_env.num_envs == 1
+            # assert eval_env.num_envs == 1
         return eval_env
 
     def _setup_lr_schedule(self) -> None:

@@ -89,7 +89,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         tensorboard_log: Optional[str] = None,
         verbose: int = 0,
         device: Union[th.device, str] = "auto",
-        support_multi_env: bool = False,
+        support_multi_env: bool = True,
         create_eval_env: bool = False,
         monitor_wrapper: bool = True,
         seed: Optional[int] = None,
@@ -98,7 +98,6 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         use_sde_at_warmup: bool = False,
         sde_support: bool = True,
     ):
-
         super(OffPolicyAlgorithm, self).__init__(
             policy=policy,
             env=env,
@@ -125,6 +124,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         self.n_episodes_rollout = n_episodes_rollout
         self.action_noise = action_noise
         self.optimize_memory_usage = optimize_memory_usage
+        self.n_envs = env.num_envs
 
         if train_freq > 0 and n_episodes_rollout > 0:
             warnings.warn(
@@ -152,6 +152,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             self.observation_space,
             self.action_space,
             self.device,
+            self.n_envs,
             optimize_memory_usage=self.optimize_memory_usage,
         )
         self.policy = self.policy_class(
@@ -273,7 +274,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         raise NotImplementedError()
 
     def _sample_action(
-        self, learning_starts: int, action_noise: Optional[ActionNoise] = None
+        self,  learning_starts: int, num_envs=1, action_noise: Optional[ActionNoise] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Sample an action according to the exploration policy.
@@ -292,7 +293,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         # Select action randomly or according to policy
         if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup):
             # Warmup phase
-            unscaled_action = np.array([self.action_space.sample()])
+            unscaled_action = np.array([ self.action_space.sample() for i in range(num_envs) ])
         else:
             # Note: when using continuous actions,
             # we assume that the policy uses tanh to scale the action
@@ -377,10 +378,10 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         total_steps, total_episodes = 0, 0
 
         assert isinstance(env, VecEnv), "You must pass a VecEnv"
-        assert env.num_envs == 1, "OffPolicyAlgorithm only support single environment"
+        # assert env.num_envs == 1, "OffPolicyAlgorithm only support single environment"
 
         if self.use_sde:
-            self.actor.reset_noise()
+            self.actor.reset_noise(self.n_envs)
 
         callback.on_rollout_start()
         continue_training = True
@@ -393,13 +394,14 @@ class OffPolicyAlgorithm(BaseAlgorithm):
 
                 if self.use_sde and self.sde_sample_freq > 0 and total_steps % self.sde_sample_freq == 0:
                     # Sample a new noise matrix
-                    self.actor.reset_noise()
+                    self.actor.reset_noise(self.n_envs)
 
                 # Select action randomly or according to policy
-                action, buffer_action = self._sample_action(learning_starts, action_noise)
-
+                action, buffer_action = self._sample_action(learning_starts, self.n_envs, action_noise)
                 # Rescale and perform action
+
                 new_obs, reward, done, infos = env.step(action)
+                done = np.all(done) # done only when all threads are done
 
                 # Give access to local variables
                 callback.update_locals(locals())
@@ -429,9 +431,9 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                 if self._vec_normalize_env is not None:
                     self._last_original_obs = new_obs_
 
-                self.num_timesteps += 1
-                episode_timesteps += 1
-                total_steps += 1
+                self.num_timesteps += self.n_envs
+                episode_timesteps += self.n_envs
+                total_steps += self.n_envs
                 self._update_current_progress_remaining(self.num_timesteps, self._total_timesteps)
 
                 # For DQN, check if the target network should be updated
@@ -444,6 +446,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                     break
 
             if done:
+                print('Episode Complete', self._episode_num )
                 total_episodes += 1
                 self._episode_num += 1
                 episode_rewards.append(episode_reward)

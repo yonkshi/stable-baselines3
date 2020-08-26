@@ -164,7 +164,7 @@ class ReplayBuffer(BaseBuffer):
     ):
         super(ReplayBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
 
-        assert n_envs == 1, "Replay buffer only support single environment for now"
+        # assert n_envs == 1, "Replay buffer only support single environment for now"
 
         # Check that the replay buffer can fit into the memory
         if psutil is not None:
