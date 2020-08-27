@@ -124,7 +124,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         self.n_episodes_rollout = n_episodes_rollout
         self.action_noise = action_noise
         self.optimize_memory_usage = optimize_memory_usage
-        self.n_envs = env.num_envs
+        self.n_envs = self.env.num_envs
 
         if train_freq > 0 and n_episodes_rollout > 0:
             warnings.warn(
