@@ -323,9 +323,9 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         """
         fps = int(self.num_timesteps / (time.time() - self.start_time))
         logger.record("time/episodes", self._episode_num, exclude="tensorboard")
-        if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+        if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0 and 'l' in self.ep_info_buffer[0].keys():
             logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
-            logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
+            logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer if 'l' in ep_info.keys()]))
         logger.record("time/fps", fps)
         logger.record("time/time_elapsed", int(time.time() - self.start_time), exclude="tensorboard")
         logger.record("time/total timesteps", self.num_timesteps, exclude="tensorboard")
