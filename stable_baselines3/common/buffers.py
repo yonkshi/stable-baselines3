@@ -100,9 +100,9 @@ class BaseBuffer(object):
         """
         upper_bound = self.buffer_size if self.full else self.pos
         batch_inds = np.random.randint(0, upper_bound, size=batch_size)
-        return self._get_samples(batch_inds, env=env)
+        return self._get_samples(batch_inds, 0, env=env)
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None):
+    def _get_samples(self, batch_inds: np.ndarray, env_idx,  env: Optional[VecNormalize] = None):
         """
         :param batch_inds:
         :param env:
@@ -195,7 +195,8 @@ class ReplayBuffer(BaseBuffer):
                     f"replay buffer {total_memory_usage:.2f}GB > {mem_available:.2f}GB"
                 )
 
-    def add(self, obs: np.ndarray, next_obs: np.ndarray, action: np.ndarray, reward: np.ndarray, done: np.ndarray) -> None:
+    def add(self, obs: np.ndarray, next_obs: np.ndarray, action: np.ndarray, reward: np.ndarray,
+            done: np.ndarray) -> None:
         # Copy to avoid modification by reference
         self.observations[self.pos] = np.array(obs).copy()
         if self.optimize_memory_usage:
@@ -232,20 +233,23 @@ class ReplayBuffer(BaseBuffer):
             batch_inds = (np.random.randint(1, self.buffer_size, size=batch_size) + self.pos) % self.buffer_size
         else:
             batch_inds = np.random.randint(0, self.pos, size=batch_size)
-        return self._get_samples(batch_inds, env=env)
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
+        # if more than one env, select one at random
+        env_idx = np.random.randint(self.n_envs) if self.n_envs > 1 else 0
+        return self._get_samples(batch_inds, env_idx, env=env)
+
+    def _get_samples(self, batch_inds: np.ndarray, env_idx: int, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
         if self.optimize_memory_usage:
-            next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, 0, :], env)
+            next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, env_idx, :], env)
         else:
-            next_obs = self._normalize_obs(self.next_observations[batch_inds, 0, :], env)
+            next_obs = self._normalize_obs(self.next_observations[batch_inds, env_idx, :], env)
 
         data = (
-            self._normalize_obs(self.observations[batch_inds, 0, :], env),
-            self.actions[batch_inds, 0, :],
+            self._normalize_obs(self.observations[batch_inds, env_idx, :], env),
+            self.actions[batch_inds, env_idx, :],
             next_obs,
-            self.dones[batch_inds],
-            self._normalize_reward(self.rewards[batch_inds], env),
+            self.dones[batch_inds, env_idx, None], # keep the (batch_size, 1) dimension requirement
+            self._normalize_reward(self.rewards[batch_inds, env_idx, None], env), # keep the (batch_size, 1) dimension requirement
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
@@ -371,7 +375,7 @@ class RolloutBuffer(BaseBuffer):
             yield self._get_samples(indices[start_idx : start_idx + batch_size])
             start_idx += batch_size
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray, env_idx, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],

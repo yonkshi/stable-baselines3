@@ -390,7 +390,8 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             done = False
             episode_reward, episode_timesteps = 0.0, 0
 
-            while not done:
+            while not np.all(done):
+                # TODO Add mechanism to "wait" for unfinished environments
 
                 if self.use_sde and self.sde_sample_freq > 0 and total_steps % self.sde_sample_freq == 0:
                     # Sample a new noise matrix
@@ -401,7 +402,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                 # Rescale and perform action
 
                 new_obs, reward, done, infos = env.step(action)
-                done = np.all(done) # done only when all threads are done
+                # done = np.all(done) # done only when all threads are done
 
                 self.num_timesteps += 1
                 episode_timesteps += 1
@@ -427,7 +428,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                     else:
                         # Avoid changing the original ones
                         self._last_original_obs, new_obs_, reward_ = self._last_obs, new_obs, reward
-
+                    # TODO Add mechanism to ensure duplicated "done" samples are not added to the buffer
                     replay_buffer.add(self._last_original_obs, new_obs_, buffer_action, reward_, done)
 
                 self._last_obs = new_obs
@@ -450,7 +451,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                 if 0 < n_steps <= total_steps:
                     break
 
-            if done:
+            if np.all(done):
                 print('Episode Complete', self._episode_num )
                 total_episodes += 1
                 self._episode_num += 1
