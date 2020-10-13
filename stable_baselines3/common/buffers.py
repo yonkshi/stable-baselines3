@@ -375,7 +375,7 @@ class RolloutBuffer(BaseBuffer):
             yield self._get_samples(indices[start_idx : start_idx + batch_size])
             start_idx += batch_size
 
-    def _get_samples(self, batch_inds: np.ndarray, env_idx, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray, env_idx = None, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
